@@ -1,0 +1,71 @@
+ #Requires AutoHotkey v2.0
+  #SingleInstance Force
+
+  ; === НАСТРОЙКИ ===
+  opacity := 180        ; 0–255 (чем меньше — тем прозрачнее)
+  ; ===================
+
+  SetTimer(() => {
+      for hwnd in WinGetList("ahk_class CabinetWClass") {
+          if DllCall("GetProp", "Ptr", hwnd, "Str", "MyTrans", "Ptr")
+              continue
+          ; WS_EX_LAYERED = 0x80000
+          ex := DllCall("GetWindowLongPtr", "Ptr", hwnd, "Int", -20, "Ptr")
+          DllCall("SetWindowLongPtr", "Ptr", hwnd, "Int", -20, "Ptr", ex | 0x80000)
+          DllCall("SetLayeredWindowAttributes", "Ptr", hwnd, "UInt", 0, "UChar", opacity, "UInt", 2)
+          DllCall("SetProp", "Ptr", hwnd, "Str", "MyTrans", "Ptr", 1)
+      }
+  }, 2000)
+
+  → Commit changes (зелёная кнопка справа внизу).
+
+  ---
+
+  2. Создай workflow для сборки
+
+  Тот же репозиторий → Add file → Create new file
+
+  Имя файла: .github/workflows/build.yml
+  (точка в начале важна! папка .github/workflows/ создастся сама)
+
+  Содержимое (копируй целиком):
+
+  name: Build AHK to EXE
+
+  on:
+    push:
+      branches: [main]
+    workflow_dispatch:  # позволяет запустить вручную из Actions
+
+  permissions:
+    contents: write
+
+  jobs:
+    build:
+      runs-on: windows-latest
+      steps:
+        - name: Checkout repository
+          uses: actions/checkout@v4
+
+        - name: Install AutoHotkey v2
+          run: |
+            choco install autohotkey --version 2.0.18 -y
+            echo "C:\Program Files\AutoHotkey" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+        - name: Compile script to EXE
+          run: |
+            "C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe" /in explorer-transparent.ahk /out explorer-transparent.exe
+
+        - name: Upload artifact
+          uses: actions/upload-artifact@v4
+          with:
+            name: explorer-transparent.exe
+            path: explorer-transparent.exe
+
+        - name: Create release (on tag push)
+          if: startsWith(github.ref, 'refs/tags/')
+          uses: softprops/action-gh-release@v1
+          with:
+            files: explorer-transparent.exe
+
+  → Commit changes.
